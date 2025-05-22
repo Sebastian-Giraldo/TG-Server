@@ -1,16 +1,15 @@
 # TG-Server/app/routers/sentiment_router.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from transformers import pipeline
+import os
+from huggingface_hub import InferenceApi
 
 router = APIRouter()
 
-# 1) Carga el pipeline desde HF Hub
-sentiment_pipe = pipeline(
-    "text-classification",
-    model="SebastianGiraldo/TG-Modelo-Final",     
-    tokenizer="SebastianGiraldo/TG-Modelo-Final", 
-    device=0,
+HF_TOKEN = os.getenv("HF_API_TOKEN")   # lo defines en Render
+hf = InferenceApi(
+  repo_id="SebastianGiraldo/TG-Modelo-Final",
+  token=HF_TOKEN
 )
 
 def clean_text(text: str) -> str:
@@ -25,11 +24,13 @@ def clean_text(text: str) -> str:
                 .replace('`', ''))
 
 def analyze_sentiment(text: str, threshold: float = 0.51, min_len: int = 3):
-    texto_limpio = clean_text(text)
-    if len(texto_limpio.strip()) < min_len:
+    t = clean_text(text).strip()
+    if len(t) < min_len:
         return {"label": "No sensible", "score": None}
-    result = sentiment_pipe(texto_limpio)[0]
-    label, score = result["label"], result["score"]
+
+    # aquí preguntamos al servicio remoto
+    out = hf(t)[0]
+    label, score = out["label"], out["score"]
     if label == "Sensible" and score < threshold:
         label = "No sensible"
     return {"label": label, "score": score}
